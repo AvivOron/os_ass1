@@ -26,6 +26,55 @@ pinit(void)
   initlock(&ptable.lock, "ptable");
 }
 
+
+
+//psaudo random number generator for schedular
+int
+pseudoRandomGenerator(int maxNum){
+  static unsigned int seed = 17;
+  seed = (7359569 * seed + 4356783); 
+  return seed  % maxNum;
+}
+
+//ticket distribution policy: Uniform time distribution - not working, causes runtime error
+void
+uniformTimeDistribution(void)
+{
+  struct proc *p;
+  int i = 0;
+    // Loop over process table and distribute tickets evenly.
+    acquire(&ptable.lock);
+    //distribute tickets
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state == RUNNABLE){
+        p->ntickets = i;
+        i++;
+      }
+    }
+
+    //get random process num
+    i = pseudoRandomGenerator(i);
+    //choose process to run
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state == RUNNABLE && p->ntickets == i){
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
+        swtch(&cpu->scheduler, p->context);
+        switchkvm();
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        proc = 0;
+      }
+    }
+    release(&ptable.lock);
+}
+
+
 //PAGEBREAK: 32
 // Look in the process table for an UNUSED proc.
 // If found, change state to EMBRYO and initialize
@@ -286,7 +335,7 @@ wait(int *status)
 void
 scheduler(void)
 {
-  struct proc *p;
+  struct proc *p; 
 
   for(;;){
     // Enable interrupts on this processor.
@@ -314,6 +363,7 @@ scheduler(void)
     release(&ptable.lock);
 
   }
+  
 }
 
 // Enter scheduler.  Must hold only ptable.lock
@@ -490,3 +540,4 @@ procdump(void)
     cprintf("\n");
   }
 }
+
