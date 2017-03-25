@@ -15,6 +15,26 @@ typedef struct {
 path_directory path_directories[50];
 char dir_and_file_str[400];
 
+char* buildFullPath(char* filename, char* dirname){
+    int dirlength, filelength, n, currIndex;
+    filelength = strlen(filename);
+    dirlength = strlen(dirname);
+    memset(dir_and_file_str, 0, sizeof(char) * 400);
+    
+    for(n = 0; n < dirlength; n++){
+        dir_and_file_str[n] = dirname[n];
+    }
+
+    currIndex = dirlength;
+    for(n=0; n < filelength; n++){
+        dir_and_file_str[currIndex++] = filename[n];
+    }
+
+    dir_and_file_str[currIndex] = '\0';
+
+    return dir_and_file_str;
+}
+
 struct inode* checkInPathDirs(char* filename){
     struct inode *ip, *pathContent;
     char content[1000];
@@ -25,48 +45,31 @@ struct inode* checkInPathDirs(char* filename){
     readi(pathContent, content, 0, 1000);
     iunlockput(pathContent);
 
-    int i,n,pos,count,length, currIndex;
+    int i,currLen,numOfDirs,length;
     path_directory *dir;
-    pos = 0;
-    count = 0;
+    currLen = 0;
+    numOfDirs = 0;
 
     memset(path_directories, 0, sizeof(path_directory) * 50);
 
     length = strlen(content);
     for(i = 0; i < length; i++){
         if(content[i] == ':'){
-            path_directories[count].len = pos;
-            path_directories[count].path[pos] = '\0';
-            count++;
-            pos = 0;
+            path_directories[numOfDirs].path[currLen] = '\0';
+            path_directories[numOfDirs].len = currLen;
+            numOfDirs++;
+            currLen = 0;
         }else{
-            if(pos < 199){
-                path_directories[count].path[pos] = content[i];
-                pos++;
+            if(currLen < 199){
+                path_directories[numOfDirs].path[currLen] = content[i];
+                currLen++;
             }
         }
     }
  
-    length = strlen(filename);
-
-    for(i = 0; i < count; i++){
-        currIndex = 0;
+    for(i = 0; i < numOfDirs; i++){
         dir = path_directories + i;
-
-        memset(dir_and_file_str, 0, sizeof(char) * 400);
-
-        for(n = 0; n < dir->len; n++){
-            dir_and_file_str[n] = dir->path[n];
-        }
-
-        currIndex = dir->len;
-        for(n=0; n < length; n++){
-            dir_and_file_str[currIndex++] = filename[n];
-        }
-
-        dir_and_file_str[currIndex] = '\0';
-
-        if((ip = namei(dir_and_file_str)) != 0){
+        if((ip = namei(buildFullPath(filename, dir->path))) != 0){
             return ip;
         }
     }
