@@ -89,12 +89,17 @@ struct inode* checkInPathDirs(char* path){
 void 
 pseudo_main(int (*entry)(int, char**), int argc, char **argv) 
 {
-  //int status = entry(argc, argv);
-  entry(argc, argv);
-  asm("mov    $0x2,%eax\n\t"
-      //"mov    " (status) ",%ebx\n\t"
-      "int    $0x40\n\t"
-      "ret\n\t");
+  int status = entry(argc, argv);
+
+  asm("movl   %0,(%%esp)\n\t" // i dont know why we put status into esp
+      "push $0x0\n\t" // i dont know why we push 0 into stack (doesnt work without it)
+      "mov    $0x2,%%eax\n\t" // call sys_exit
+      "int    $0x40\n\t" 
+      "ret\n\t" 
+             : /* no output operands */
+             : "r" (status) /* input operands */
+             : "%eax", "%esp" /* clobbered registers */
+  );
 }
 
 int
@@ -175,7 +180,7 @@ exec(char *path, char **argv)
   }
   ustack[4+argc] = 0;
 
-  ustack[0] = 8;  // fake return PC
+  ustack[0] = 0xffffffff;  // fake return PC
   ustack[1] = elf.entry;
   ustack[2] = argc;
   ustack[3] = sp - (argc+1)*4;  // argv pointer

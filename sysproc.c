@@ -26,6 +26,7 @@ sys_exit(void)
   int status;
   if(argint(0, &status) < 0)
     return -1;
+  //cprintf("%d", status);
   exit(status);
   return 0;  // not reached
 }
