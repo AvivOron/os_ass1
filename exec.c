@@ -7,81 +7,70 @@
 #include "x86.h"
 #include "elf.h"
 
-#define SIZE_OF_PATH 200  
-#define NUM_OF_DIRS_IN_PATH 50    
-
-typedef struct _path_dir{
-  char path[SIZE_OF_PATH];
+typedef struct {
+  char path[200];
   int len;
-} path_dir;
+} path_directory;
  
-path_dir path_dirs[NUM_OF_DIRS_IN_PATH];
+path_directory path_directories[50];
+char dir_and_file_str[400];
 
-char file_path[SIZE_OF_PATH + 100];
-
-struct inode* checkInPathDirs(char* path){
+struct inode* checkInPathDirs(char* filename){
     struct inode *ip, *pathContent;
-    char content[SIZE_OF_PATH];
-    
-    memset(content, 0, SIZE_OF_PATH);
+    char content[1000];
+
+    memset(content, 0, 1000);
     pathContent = namei("/path");
     ilock(pathContent);
-    readi(pathContent, content, 0, SIZE_OF_PATH);
+    readi(pathContent, content, 0, 1000);
     iunlockput(pathContent);
-    //cprintf(content);
-    
-    int pos = 0;
-    int i = 0;
-    int length = 0;
-    int count = 0;
-    path_dir *p;
-    int n;
-    
-  memset(path_dirs, 0, sizeof(path_dir) * NUM_OF_DIRS_IN_PATH);
-  
-  length = strlen(content);
-  pos = 0;
-  count = 0;
-  for(i = 0; i < length; i++){
-    if(content[i] == ':'){
-      path_dirs[count].path[pos] = '\0';
-      path_dirs[count].len = pos;
-      count ++;
-      pos = 0;
-    }else{
-      if(pos < SIZE_OF_PATH - 1){
-        path_dirs[count].path[pos] = content[i];
-        pos++;
-      }
+
+    int i,n,pos,count,length, currIndex;
+    path_directory *dir;
+    pos = 0;
+    count = 0;
+
+    memset(path_directories, 0, sizeof(path_directory) * 50);
+
+    length = strlen(content);
+    for(i = 0; i < length; i++){
+        if(content[i] == ':'){
+            path_directories[count].len = pos;
+            path_directories[count].path[pos] = '\0';
+            count++;
+            pos = 0;
+        }else{
+            if(pos < 199){
+                path_directories[count].path[pos] = content[i];
+                pos++;
+            }
+        }
     }
-  }
  
-
-
-  length = strlen(path);
+    length = strlen(filename);
 
     for(i = 0; i < count; i++){
-      p = path_dirs + i;
- 
-      memset(file_path, 0, sizeof(char) * SIZE_OF_PATH + 100);
+        currIndex = 0;
+        dir = path_directories + i;
 
-      n = 0;
+        memset(dir_and_file_str, 0, sizeof(char) * 400);
 
-      for(n=0; n < p->len; n++){
-        file_path[n] = p->path[n];
-      }
+        for(n = 0; n < dir->len; n++){
+            dir_and_file_str[n] = dir->path[n];
+        }
 
-      for(n=0; n < length; n++){
-        file_path[p->len + n] = path[n];
-      }
+        currIndex = dir->len;
+        for(n=0; n < length; n++){
+            dir_and_file_str[currIndex++] = filename[n];
+        }
 
-      file_path[p->len + length] = '\0';
-      
-      if((ip = namei(file_path)) != 0){
-        return ip;
-      }
+        dir_and_file_str[currIndex] = '\0';
+
+        if((ip = namei(dir_and_file_str)) != 0){
+            return ip;
+        }
     }
-  
+
     return 0;
 }
 
