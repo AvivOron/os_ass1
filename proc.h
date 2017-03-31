@@ -67,6 +67,8 @@ struct proc {
   //new fields
   int exit_status;
   int ntickets;
+  int specificGlobalTickets;
+  int priority;
 };
 
 // Process memory is laid out contiguously, low addresses first:

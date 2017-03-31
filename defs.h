@@ -103,9 +103,12 @@ int             pipewrite(struct pipe*, char*, int);
 
 //PAGEBREAK: 16
 // proc.c
-//****changed exit signature ***
+//****changed exit and wait signature ***
 void            exit(int);
 int             wait(int*);
+//added new syscall priority
+void 			priority(int);
+void 			policy(int);
 //rest
 int             fork(void);
 int             growproc(int);

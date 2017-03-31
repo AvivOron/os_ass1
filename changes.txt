@@ -1,0 +1,24 @@
+for syscall - priority + policy
+1. proc.c - function priority
+2. user.h + defs.h - priority signature
+3. sysproc.c - function sys_priority
+4. syscall.c - extern decleration + array of syscalls
+5. syscall.h - #define SYS_priority  22 - for array of syscalls
+6. usys.s - SYSCALL(priority)
+
+for all policies:
+1. iniciate tickets in allocproc
+2. check tickets in scheduler
+
+for Dynamic tickets allocation:
+1. add 10 tickets when sleep is called, since sleep == blocking
+2. minus 1 ticket when yield is called, since yield == ready, meaning also process has exited it's runtime before finishing its quata
+
+
+for syscall - policy
+1. proc.c - function priority
+2. user.h + defs.h - priority signature
+3. sysproc.c - function sys_priority
+4. syscall.c - extern decleration + array of syscalls
+5. syscall.h - #define SYS_priority  22 - for array of syscalls
+6. usys.s - SYSCALL(priority)

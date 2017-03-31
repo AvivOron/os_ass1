@@ -26,6 +26,8 @@ int uptime(void);
 //changes system calls
 int exit(int);
 int wait(int*);
+void priority(int);
+void policy(int);
 
 // ulib.c
 int stat(char*, struct stat*);

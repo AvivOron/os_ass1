@@ -7,6 +7,10 @@
 #include "proc.h"
 #include "spinlock.h"
 
+
+int GLOBALTICKETS = 0;  // number of tickets
+int POLICY = 2;  // number of policy chosen
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -15,6 +19,7 @@ struct {
 static struct proc *initproc;
 
 int nextpid = 1;
+
 extern void forkret(void);
 extern void trapret(void);
 
@@ -26,7 +31,7 @@ pinit(void)
   initlock(&ptable.lock, "ptable");
 }
 
-
+int nextticket = 0;
 
 //psaudo random number generator for schedular
 int
@@ -34,44 +39,6 @@ pseudoRandomGenerator(int maxNum){
   static unsigned int seed = 17;
   seed = (7359569 * seed + 4356783); 
   return seed  % maxNum;
-}
-
-//ticket distribution policy: Uniform time distribution - not working, causes runtime error
-void
-uniformTimeDistribution(void)
-{
-  struct proc *p;
-  int i = 0;
-    // Loop over process table and distribute tickets evenly.
-    acquire(&ptable.lock);
-    //distribute tickets
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state == RUNNABLE){
-        p->ntickets = i;
-        i++;
-      }
-    }
-
-    //get random process num
-    i = pseudoRandomGenerator(i);
-    //choose process to run
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state == RUNNABLE && p->ntickets == i){
-        // Switch to chosen process.  It is the process's job
-        // to release ptable.lock and then reacquire it
-        // before jumping back to us.
-        proc = p;
-        switchuvm(p);
-        p->state = RUNNING;
-        swtch(&cpu->scheduler, p->context);
-        switchkvm();
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        proc = 0;
-      }
-    }
-    release(&ptable.lock);
 }
 
 
@@ -98,6 +65,21 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->priority = 10;
+
+  if(POLICY == 0){
+    p->ntickets = GLOBALTICKETS;
+    GLOBALTICKETS++;
+  }
+  if(POLICY == 1){
+    p->ntickets = GLOBALTICKETS+p->priority;
+    GLOBALTICKETS = GLOBALTICKETS+p->priority;
+  }
+  if(POLICY == 2){
+    p->ntickets = GLOBALTICKETS+20;
+    GLOBALTICKETS = GLOBALTICKETS+20;
+    p->specificGlobalTickets = GLOBALTICKETS;
+  }
 
   release(&ptable.lock);
 
@@ -322,6 +304,22 @@ wait(int *status)
   }
 }
 
+//checks if the process distribution tickets are in the right place
+int
+isTickets(int ntickets, int priority, int sgTickets, int i){
+  if (POLICY == 0 && ntickets == i){
+    return 1;
+  }
+  else if (POLICY == 1 ){
+    if (i >= ntickets - priority && i <= ntickets)
+      return 1;
+  }
+  else if (POLICY == 2){
+    if (i >= sgTickets - ntickets && i <= sgTickets)
+      return 1;
+  }
+  return 0;
+}
 
 
 //PAGEBREAK: 42
@@ -336,32 +334,35 @@ void
 scheduler(void)
 {
   struct proc *p; 
-
+  int i;
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+    if (GLOBALTICKETS == 0)
+      i = pseudoRandomGenerator(1);
+    else
+      i = pseudoRandomGenerator(GLOBALTICKETS);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
+      if(p->state == RUNNABLE && isTickets(p->ntickets, p->priority, p->specificGlobalTickets, i) == 1){
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-      swtch(&cpu->scheduler, p->context);
-      switchkvm();
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
+        swtch(&cpu->scheduler, p->context);
+        switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      proc = 0;
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        proc = 0;
+      }
     }
     release(&ptable.lock);
-
   }
   
 }
@@ -391,15 +392,60 @@ sched(void)
   cpu->intena = intena;
 }
 
+// update priority for specific proc
+void
+priority(int int_priority)
+{
+  acquire(&ptable.lock);  
+  proc->priority = int_priority;
+  proc->ntickets = GLOBALTICKETS+proc->priority;
+  GLOBALTICKETS = GLOBALTICKETS+proc->priority;
+  release(&ptable.lock);
+}
+
 // Give up the CPU for one scheduling round.
 void
 yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   proc->state = RUNNABLE;
+  if (POLICY == 2 && proc->ntickets > 2){
+    proc->ntickets = proc->ntickets-1;
+    proc->specificGlobalTickets = proc->specificGlobalTickets-1;
+  }
   sched();
   release(&ptable.lock);
 }
+
+void
+policy(int pol)
+{
+  struct proc *p; 
+  acquire(&ptable.lock);  //DOC: yieldlock
+  POLICY = pol;
+  GLOBALTICKETS = 0;
+  if (POLICY == 0){
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        p->ntickets = GLOBALTICKETS;
+        GLOBALTICKETS++;
+    }
+  }
+  else if (POLICY == 1){
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      p->ntickets = GLOBALTICKETS+p->priority;
+      GLOBALTICKETS = GLOBALTICKETS+p->priority;
+    }
+  }
+  else if (POLICY == 2){
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        p->ntickets = GLOBALTICKETS+20;
+        GLOBALTICKETS = GLOBALTICKETS+20;
+        p->specificGlobalTickets = GLOBALTICKETS;
+    }
+  }
+  release(&ptable.lock);
+}
+
 
 // A fork child's very first scheduling by scheduler()
 // will swtch here.  "Return" to user space.
@@ -447,6 +493,18 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   proc->chan = chan;
   proc->state = SLEEPING;
+  if (POLICY == 2){
+    if (proc->ntickets < 100){
+      proc->ntickets = proc->ntickets+10;
+      GLOBALTICKETS = GLOBALTICKETS + proc->ntickets+10;
+      if (proc->ntickets > 100){
+        proc->ntickets = 100;
+        GLOBALTICKETS = GLOBALTICKETS - (proc->ntickets - 100);
+      }
+      proc->specificGlobalTickets = GLOBALTICKETS;
+    }
+  }
+
   sched();
 
   // Tidy up.

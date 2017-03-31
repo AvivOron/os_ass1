@@ -13,12 +13,6 @@ sys_fork(void)
   return fork();
 }
 
-//int
-//sys_exit(void)
-//{
-//  exit();
-//  return 0;  // not reached
-//}
 
 int
 sys_exit(void)
@@ -31,11 +25,25 @@ sys_exit(void)
   return 0;  // not reached
 }
 
-//int
-//sys_wait(void)
-//{
-//  return wait();
-//}
+int
+sys_priority(void)
+{
+  int int_priority;
+  if(argint(0, &int_priority) < 0)
+    return -1;
+  priority(int_priority);
+  return 0; 
+}
+
+int
+sys_policy(void)
+{
+  int policyNum;
+  if(argint(0, &policyNum) < 0)
+    return -1;
+  priority(policyNum);
+  return 0; 
+}
 
 int
 sys_wait(void)
@@ -43,7 +51,7 @@ sys_wait(void)
   int status;
   if(argint(0, &status) < 0)
     return -1;
-  return wait(&status);
+  return wait((int*)status);
 }
 
 int
