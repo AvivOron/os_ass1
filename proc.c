@@ -268,9 +268,10 @@ exit(int status)
   // Jump into the scheduler, never to return.
   proc->state = ZOMBIE;
   acquire(&tickslock);
-  p->ttime = ticks;
+  proc->ttime = ticks;
   release(&tickslock);
   sched();
+
   panic("zombie exit");
 }
 
@@ -383,9 +384,9 @@ updateStats(){
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if (p->state == RUNNING) //check if running
-      p->rutime++;
-    else if (p->state == SLEEPING) //check if blocking
+    //if (p->state == RUNNING) //check if running
+    //  p->rutime++;
+    if (p->state == SLEEPING) //check if blocking
       p->stime++;
     else if (p->state == RUNNABLE) //check if ready
       p->retime++;
@@ -442,7 +443,8 @@ scheduler(void)
         // before jumping back to us.
         proc = p;
         switchuvm(p);
-        p->state = RUNNING;
+        p->state = RUNNING;    
+        p->rutime++;
         swtch(&cpu->scheduler, p->context);
         switchkvm();
 
