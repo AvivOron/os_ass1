@@ -9,6 +9,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct perf;
 
 // bio.c
 void            binit(void);
@@ -109,6 +110,7 @@ int             wait(int*);
 //added new syscall priority
 void 			priority(int);
 void 			policy(int);
+int wait_stat(int*, struct perf*);
 //rest
 int             fork(void);
 int             growproc(int);

@@ -46,6 +46,18 @@ sys_policy(void)
 }
 
 int
+sys_wait_stat(void)
+{
+  int status;
+  int performance;
+  if(argint(0, &status) < 0)
+    return -1;
+  if(argint(1, &performance) < 0)
+    return -1;
+  return wait_stat((int*)status, (struct perf*)performance);
+}
+
+int
 sys_wait(void)
 {
   int status;

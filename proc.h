@@ -15,6 +15,7 @@ struct cpu {
 
 extern struct cpu cpus[NCPU];
 extern int ncpu;
+extern void updateStats();
 
 // Per-CPU variables, holding pointers to the
 // current cpu and to the current process.
@@ -69,6 +70,14 @@ struct proc {
   int ntickets;
   int specificGlobalTickets;
   int priority;
+
+  //performance measuring
+  int ctime; //creation time
+  int ttime; //termination time
+  int stime; //time in SLEEPING state
+  int retime; //time in READY state
+  int rutime; //time in RUNNING state
+
 };
 
 // Process memory is laid out contiguously, low addresses first:

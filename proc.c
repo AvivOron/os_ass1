@@ -6,10 +6,14 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "stat.h"
+#include "perf.h"
 
 
 int GLOBALTICKETS = 0;  // number of tickets
 int POLICY = 2;  // number of policy chosen
+static unsigned int SEED;
+
 
 struct {
   struct spinlock lock;
@@ -36,9 +40,8 @@ int nextticket = 0;
 //psaudo random number generator for schedular
 int
 pseudoRandomGenerator(int maxNum){
-  static unsigned int seed = 17;
-  seed = (7359569 * seed + 4356783); 
-  return seed  % maxNum;
+  SEED = (7359569 * SEED + 4356783); 
+  return SEED  % maxNum;
 }
 
 
@@ -65,6 +68,15 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+
+  //update creation time
+  acquire(&tickslock);
+  p->ctime = ticks;
+  p->stime = 0;
+  p->rutime = 0;
+  p->retime = 0;
+  release(&tickslock);
+  //update priority
   p->priority = 10;
 
   if(POLICY == 0){
@@ -255,6 +267,9 @@ exit(int status)
 
   // Jump into the scheduler, never to return.
   proc->state = ZOMBIE;
+  acquire(&tickslock);
+  p->ttime = ticks;
+  release(&tickslock);
   sched();
   panic("zombie exit");
 }
@@ -302,6 +317,80 @@ wait(int *status)
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
     sleep(proc, &ptable.lock);  //DOC: wait-sleep
   }
+}
+
+///wait_stat updates the waiting status and also the statistics
+int
+wait_stat(int *status, struct perf * performance)
+{
+  struct proc *p;
+  int havekids, pid;
+
+  acquire(&ptable.lock);
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent != proc)
+        continue;
+      havekids = 1;
+      if(p->state == ZOMBIE){
+        // Found one.
+        pid = p->pid;
+        kfree(p->kstack);
+        p->kstack = 0;
+        freevm(p->pgdir);
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+        *status = p->exit_status;
+        p->exit_status = 0; 
+
+        performance->stime = p->stime;
+        performance->ttime = p->ttime;
+        performance->retime = p->retime;
+        performance->rutime = p->rutime;
+        performance->ctime = p->ctime;
+
+        p->stime = 0;
+        p->ttime = 0;
+        p->retime = 0;
+        p->rutime = 0;
+        p->ctime = 0;
+
+        release(&ptable.lock);
+        return pid;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || proc->killed){
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(proc, &ptable.lock);  //DOC: wait-sleep
+  }
+}
+
+
+void
+updateStats(){
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if (p->state == RUNNING) //check if running
+      p->rutime++;
+    else if (p->state == SLEEPING) //check if blocking
+      p->stime++;
+    else if (p->state == RUNNABLE) //check if ready
+      p->retime++;
+  }
+  release(&ptable.lock);
 }
 
 //checks if the process distribution tickets are in the right place

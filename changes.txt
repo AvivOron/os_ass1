@@ -15,10 +15,27 @@ for Dynamic tickets allocation:
 2. minus 1 ticket when yield is called, since yield == ready, meaning also process has exited it's runtime before finishing its quata
 
 
-for syscall - policy
-1. proc.c - function priority
-2. user.h + defs.h - priority signature
-3. sysproc.c - function sys_priority
-4. syscall.c - extern decleration + array of syscalls
-5. syscall.h - #define SYS_priority  22 - for array of syscalls
-6. usys.s - SYSCALL(priority)
+adding syscalls:
+In proc.c, added function 'priority':
+Here is the code of the system call itself. 
+
+In syscall.c, added sys_priority to system calls array + extern declaration:
+the array is accessed by the function 'syscall' (in the same file). The number of the specific system call is it's index in the array, so the address of the relevant system call should be in this location in the array (it's like a "jump table"). This is why you also need the "extern" (the code should know the function to put it's address in the array).
+
+In files user.h and defs.h, added signature of priority system call:
+we saw that these 2 files have declarations of all system calls, so we added the new ones too to be consistent.
+in defs.h it's necessary because kernel-space files include defs.h, so this is how they know 'priority'.
+in user.h we are not really sure it's necessary, and it compiles without it. 
+
+In syscall.h, added #define SYS_priority 22:
+for the same reason we did it in 'syscall.c', every system call should have a number or index to the table of system calls, otherwise it wont be reachable from the function 'syscall'.
+
+In usys.s, added SYSCALL(priority):
+All this file does is define the macro that is used every time a system call is performed. Again, all system calls should be here in order to be reachable.
+
+In sysproc.c, added function 'sys_priority':
+This is the function that actually gets called by 'syscall'. The general flow of system calls is:
+trap --> syscall --> sys_priority (for example) --> priority
+
+
+
