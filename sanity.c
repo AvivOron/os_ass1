@@ -3,10 +3,28 @@
 #include "user.h"
 #include "perf.h"
 
+
+int fib(int sum, int p){
+    int next = 0, first = 0, second = 0;
+   for ( int i = 0 ; i < sum ; i++ ){
+      if ( i <= 1 )
+         next = i;
+      else
+      {
+         next = first + second;
+         first = second;
+         second = next;
+      }
+   }
+      return next;
+
+}
+
+
 int main() {
 
   int pid = 0;
-  int numOfThreads = 15;
+  int numOfThreads = 10;
   int n = 100;
   int i, factorial;
   struct perf perfs[numOfThreads];
@@ -28,13 +46,15 @@ int main() {
             if(i%2 == 0){ // CPU bound thread
                 factorial = 0;
                 for(i=1; i<=n; ++i)
-                    factorial *= i;              
+                    factorial *= i; 
+                    priority(i*10);             
             }
-            else if (i%2== 2){ // IO bound thread
+            else if (i%2== 1){ // IO bound thread
                 factorial = 0;
                 for(i=1; i<=n; ++i){
                     factorial *= i; 
-                    sleep(1); 
+                    sleep(10); 
+                    priority(i*10);             
                 }
             }
             exit(0);
@@ -72,33 +92,3 @@ int main() {
       printf(1, "\n    Turnaround Time for I/O bounded threads = %d\n", io_ttime / (numOfThreads / 2));
       printf(1, "\n    Waiting Time for I/O bounded threads = %d\n\n", io_retime / (numOfThreads / 2));
     }
-
-/*
-
-struct ProcStats {
-   int pid;
-   char * type;
-   int status;
-   struct perf * performance; 
-};
-
-int main(int argc, char *argv[]) {
-    //int stat;
-    int totalProcess = 100;
-    struct ProcStats *array[totalProcess];
-
-    if(argc > 1){
-        printf(1, "sanity %s not a valid argument: no arguments \n",argv[1]);
-        exit(0);
-    }
-
-    for (int i = 0 ; i < totalProcess ; i++){
-        int pid = fork();
-        if (pid == 0) {
-            array[i]->pid = pid;
-            printf(1, "son %d \n", array[i]->pid);
-            exit(0);
-        }
-    }
-    exit(0);
-}*/
