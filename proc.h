@@ -77,6 +77,7 @@ struct proc {
   int stime; //time in SLEEPING state
   int retime; //time in READY state
   int rutime; //time in RUNNING state
+  int lastTick;
 
 };
 

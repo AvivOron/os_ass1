@@ -72,10 +72,12 @@ found:
   //update creation time
   acquire(&tickslock);
   p->ctime = ticks;
+  release(&tickslock);
   p->stime = 0;
   p->rutime = 0;
   p->retime = 0;
-  release(&tickslock);
+  p->ttime = 0;
+  p->lastTick = 0;
   //update priority
   p->priority = 10;
 
@@ -151,7 +153,14 @@ userinit(void)
   // writes to be visible, and the lock is also needed
   // because the assignment might not be atomic.
   acquire(&ptable.lock);
-
+  //if (p->state == RUNNABLE)
+  //  p->retime = p->retime + ticks - p->lastTick;
+  //else if (p->state == RUNNING)
+  //  p->rutime = p->rutime + ticks - p->lastTick;
+  //else if (p->state == SLEEPING)
+  //  p->stime = p->stime + ticks - p->lastTick;
+  //p->lastTick = ticks;
+  p->rutime = ticks-p->ctime;
   p->state = RUNNABLE;
 
   release(&ptable.lock);
@@ -215,8 +224,16 @@ fork(void)
   pid = np->pid;
 
   acquire(&ptable.lock);
-
+  //if (proc->state == RUNNABLE)
+  //  proc->retime = proc->retime + ticks - proc->lastTick;
+  //else if (proc->state == RUNNING)
+  //  proc->rutime = proc->rutime + ticks - proc->lastTick;
+  //else if (proc->state == SLEEPING)
+  //  proc->stime = proc->stime + ticks - proc->lastTick;
+  //proc->lastTick = ticks;
+  np->rutime = ticks-np->ctime;
   np->state = RUNNABLE;
+  np->lastTick = ticks;
 
   release(&ptable.lock);
 
@@ -302,9 +319,7 @@ wait(int *status)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        //if(p->exit_status == NULL)
-        //  *status = 0;
-        //else
+        if(p->exit_status != 0)
           *status = p->exit_status;
         p->exit_status = 0; 
         release(&ptable.lock);
@@ -363,6 +378,7 @@ wait_stat(int *status, struct perf * performance)
         p->retime = 0;
         p->rutime = 0;
         p->ctime = 0;
+        p->lastTick = 0;
 
         release(&ptable.lock);
         return pid;
@@ -378,23 +394,6 @@ wait_stat(int *status, struct perf * performance)
     // Wait for children to exit.  (See wakeup1 call in proc_exit.)
     sleep(proc, &ptable.lock);  //DOC: wait-sleep
   }
-}
-
-
-void
-updateStats(){
-  struct proc *p;
-
-  acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    //if (p->state == RUNNING) //check if running
-    //  p->rutime++;
-    if (p->state == SLEEPING) //check if blocking
-      p->stime++;
-    else if (p->state == RUNNABLE) //check if ready
-      p->retime++;
-  }
-  release(&ptable.lock);
 }
 
 //checks if the process distribution tickets are in the right place
@@ -445,14 +444,27 @@ scheduler(void)
         // to release ptable.lock and then reacquire it
         // before jumping back to us.
         proc = p;
+        if (p->state == RUNNABLE)
+          p->retime = p->retime + ticks - p->lastTick;
+        else if (p->state == RUNNING)
+          p->rutime = p->rutime + ticks - p->lastTick;
+        else if (p->state == SLEEPING)
+          p->stime = p->stime + ticks - p->lastTick;
+        p->lastTick = ticks;
         switchuvm(p);
-        p->state = RUNNING;    
-        p->rutime++;
+        p->state = RUNNING;
         swtch(&cpu->scheduler, p->context);
         switchkvm();
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
+        if (p->state == RUNNABLE)
+          p->retime = p->retime + ticks - p->lastTick;
+        else if (p->state == RUNNING)
+          p->rutime = p->rutime + ticks - p->lastTick;
+        else if (p->state == SLEEPING)
+          p->stime = p->stime + ticks - p->lastTick;
+        p->lastTick = ticks;
         proc = 0;
       }
     }
@@ -502,6 +514,14 @@ void
 yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
+  if (proc->state == RUNNABLE)
+    proc->retime = proc->retime + ticks - proc->lastTick;
+  else if (proc->state == RUNNING)
+    proc->rutime = proc->rutime + ticks - proc->lastTick;
+  else if (proc->state == SLEEPING)
+    proc->stime = proc->stime + ticks - proc->lastTick;
+  proc->lastTick = ticks;
+
   proc->state = RUNNABLE;
   if (POLICY == 2 && proc->ntickets > 2){
     proc->ntickets = proc->ntickets-1;
@@ -586,7 +606,16 @@ sleep(void *chan, struct spinlock *lk)
 
   // Go to sleep.
   proc->chan = chan;
+  if (proc->state == RUNNABLE)
+    proc->retime = proc->retime + ticks - proc->lastTick;
+  else if (proc->state == RUNNING)
+    proc->rutime = proc->rutime + ticks - proc->lastTick;
+  else if (proc->state == SLEEPING)
+    proc->stime = proc->stime + ticks - proc->lastTick;
+  proc->lastTick = ticks;
   proc->state = SLEEPING;
+  proc->lastTick = ticks;
+
   if (POLICY == 2){
     if (proc->ntickets < 100){
       proc->ntickets = proc->ntickets+10;
@@ -620,8 +649,16 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan){
+      if (p->state == RUNNABLE)
+        p->retime = p->retime + ticks - p->lastTick;
+      else if (p->state == RUNNING)
+        p->rutime = p->rutime + ticks - p->lastTick;
+      else if (p->state == SLEEPING)
+        p->stime = p->stime + ticks - p->lastTick;
+      p->lastTick = ticks;
       p->state = RUNNABLE;
+    }
 }
 
 // Wake up all processes sleeping on chan.
@@ -646,8 +683,16 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
-        p->state = RUNNABLE;
+      if(p->state == SLEEPING){
+        if (p->state == RUNNABLE)
+          p->retime = p->retime + ticks - p->lastTick;
+        else if (p->state == RUNNING)
+          p->rutime = p->rutime + ticks - p->lastTick;
+        else if (p->state == SLEEPING)
+          p->stime = p->stime + ticks - p->lastTick;
+        p->lastTick = ticks;
+        p->state = RUNNABLE;    
+      }
       release(&ptable.lock);
       return 0;
     }
